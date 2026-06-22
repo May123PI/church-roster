@@ -31,19 +31,25 @@ def _bottom_border():
     return Border(bottom=s)
 
 
-# ── fair rotation ──────────────────────────────────────────────────────────
+# ── fair rotation (no consecutive repeats) ────────────────────────────────
 def _build_rotation(people: list[str], num_slots: int) -> list[str]:
     if not people:
         return ["—"] * num_slots
     counts: dict[str, int] = {p: 0 for p in people}
     result = []
+    last = None
     for _ in range(num_slots):
         min_count = min(counts.values())
-        candidates = [p for p, c in counts.items() if c == min_count]
+        # prefer candidates who weren't assigned last week
+        candidates = [p for p, c in counts.items() if c == min_count and p != last]
+        if not candidates:
+            # only one person in pool — no choice but to repeat
+            candidates = [p for p, c in counts.items() if c == min_count]
         random.shuffle(candidates)
         chosen = candidates[0]
         counts[chosen] += 1
         result.append(chosen)
+        last = chosen
     return result
 
 
