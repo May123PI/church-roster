@@ -91,30 +91,82 @@ with col3:
 # SECTION 2 — Service Dates
 # ═══════════════════════════════════════════════════════════════════════════
 st.markdown("## 2. Service Dates")
+st.caption("Add dates one at a time, or use **Bulk Add** to fill a whole season in one click.")
 
-col_a, col_b = st.columns([2, 4])
-with col_a:
-    picked = st.date_input("Add a service date", value=None, key="date_picker")
-    if st.button("Add date"):
-        if picked and picked not in st.session_state.service_dates:
-            st.session_state.service_dates.append(picked)
+tab_single, tab_bulk = st.tabs(["Add single date", "Bulk add (by weekday)"])
+
+with tab_single:
+    col_a, col_b = st.columns([2, 3])
+    with col_a:
+        picked = st.date_input("Service date", value=None, key="date_picker")
+        if st.button("Add date"):
+            if picked and picked not in st.session_state.service_dates:
+                st.session_state.service_dates.append(picked)
+                st.session_state.service_dates.sort()
+                st.rerun()
+
+with tab_bulk:
+    st.markdown("Add every **nth weekday** between two dates (e.g. every Sunday for a year).")
+    bc1, bc2, bc3, bc4 = st.columns([2, 2, 2, 1])
+    with bc1:
+        bulk_start = st.date_input("From", value=date.today(), key="bulk_start")
+    with bc2:
+        bulk_end = st.date_input(
+            "To (max 12 months ahead)",
+            value=date(date.today().year + 1, date.today().month, date.today().day),
+            key="bulk_end",
+            min_value=date.today(),
+            max_value=date(date.today().year + 1, 12, 31),
+        )
+    with bc3:
+        WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday",
+                    "Thursday", "Friday", "Saturday"]
+        bulk_day = st.selectbox("Weekday", WEEKDAYS, index=0, key="bulk_day")
+        bulk_every = st.selectbox("Frequency", ["Every week", "Every 2 weeks", "Every 4 weeks"], key="bulk_every")
+    with bc4:
+        st.markdown("<br>", unsafe_allow_html=True)
+        if st.button("Bulk add"):
+            from datetime import timedelta
+            step = {"Every week": 7, "Every 2 weeks": 14, "Every 4 weeks": 28}[bulk_every]
+            target_wd = WEEKDAYS.index(bulk_day) % 7  # 0=Mon in Python, Sunday=6
+            # Python weekday: Mon=0 … Sun=6; we use isoweekday Sun=7→0
+            py_target = 6 if target_wd == 0 else target_wd - 1
+            # find first occurrence on or after bulk_start
+            cursor = bulk_start
+            days_ahead = (py_target - cursor.weekday()) % 7
+            cursor = cursor + timedelta(days=days_ahead)
+            added = 0
+            while cursor <= bulk_end:
+                if cursor not in st.session_state.service_dates:
+                    st.session_state.service_dates.append(cursor)
+                    added += 1
+                cursor += timedelta(days=step)
             st.session_state.service_dates.sort()
+            st.success(f"Added {added} date(s).")
             st.rerun()
 
-with col_b:
-    if st.session_state.service_dates:
-        st.markdown("**Scheduled services:**")
-        to_remove = None
-        for i, d in enumerate(st.session_state.service_dates):
-            c1, c2 = st.columns([6, 1])
-            c1.write(f"**{d.strftime('%A, %d %B %Y')}**")
-            if c2.button("✕", key=f"rm_{i}", help="Remove this date"):
+# date list with remove buttons
+st.markdown("---")
+if st.session_state.service_dates:
+    n_dates = len(st.session_state.service_dates)
+    st.markdown(f"**{n_dates} service date(s) scheduled:**")
+    # show in 3-column grid
+    to_remove = None
+    grid_cols = st.columns(3)
+    for i, d in enumerate(st.session_state.service_dates):
+        with grid_cols[i % 3]:
+            cc1, cc2 = st.columns([5, 1])
+            cc1.write(f"{d.strftime('%a, %d %b %Y')}")
+            if cc2.button("✕", key=f"rm_{i}", help="Remove"):
                 to_remove = i
-        if to_remove is not None:
-            st.session_state.service_dates.pop(to_remove)
-            st.rerun()
-    else:
-        st.info("No dates added yet. Use the date picker on the left.")
+    if to_remove is not None:
+        st.session_state.service_dates.pop(to_remove)
+        st.rerun()
+    if st.button("Clear all dates", type="secondary"):
+        st.session_state.service_dates = []
+        st.rerun()
+else:
+    st.info("No dates added yet.")
 
 # ═══════════════════════════════════════════════════════════════════════════
 # SECTION 3 — Duties & People
