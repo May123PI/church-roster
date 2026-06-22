@@ -1,0 +1,35 @@
+{
+  "church_name": "St Example Parish Church",
+  "duties": [
+    {"name": "Sides Person / Welcomer", "people": []},
+    {"name": "Reader (1st Lesson)", "people": []},
+    {"name": "Intercessor", "people": []},
+    {"name": "Ad Hoc Duty 1", "people": []},
+    {"name": "Ad Hoc Duty 2", "people": []},
+    {"name": "Ad Hoc Duty 3", "people": []}
+  ],
+  "hymns": [
+    "The Lord's My Shepherd",
+    "Be Thou My Vision",
+    "How Great Thou Art",
+    "Guide Me O Thou Great Redeemer",
+    "Immortal Invisible",
+    "All Things Bright and Beautiful",
+    "O Lord My God",
+    "To God Be the Glory",
+    "Dear Lord and Father of Mankind",
+    "Praise My Soul the King of Heaven"
+  ],
+  "readings": [
+    "Genesis 1:1-5",
+    "Psalm 23",
+    "Isaiah 40:28-31",
+    "John 3:14-21",
+    "Romans 8:31-39",
+    "1 Corinthians 13:1-13",
+    "Philippians 4:4-9",
+    "Revelation 21:1-7"
+  ],
+  "hymns_per_service": 3,
+  "readings_per_service": 2
+}
