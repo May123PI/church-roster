@@ -59,9 +59,10 @@ def generate_excel(
     service_dates: list[date],
     duties: list[dict],          # [{"name": str, "people": [str]}]
     hymns: list[str],
-    readings: list[str],
+    readings: list[dict],        # [{"ref": str, "text": str}]
     hymns_per_service: int = 3,
     readings_per_service: int = 2,
+    prayers: list[dict] = None,  # [{"name": str, "text": str}]
 ) -> bytes:
     service_dates = sorted(service_dates)
     n = len(service_dates)
@@ -71,6 +72,9 @@ def generate_excel(
     for duty in duties:
         duty_assignments.append(_build_rotation(duty["people"], n))
 
+    if prayers is None:
+        prayers = []
+
     # shuffle & assign hymns / readings (cycle if list is shorter than needed)
     hymn_pool = hymns.copy()
     random.shuffle(hymn_pool)
@@ -78,7 +82,7 @@ def generate_excel(
     random.shuffle(reading_pool)
 
     service_hymns: list[list[str]] = []
-    service_readings: list[list[str]] = []
+    service_readings: list[list[dict]] = []
     hymn_idx = 0
     reading_idx = 0
     for _ in range(n):
@@ -105,7 +109,7 @@ def generate_excel(
         _build_service_sheet(
             wb, church_name, svc_date, duties,
             [duty_assignments[d][i] for d in range(len(duties))],
-            service_hymns[i], service_readings[i],
+            service_hymns[i], service_readings[i], prayers,
         )
 
     buf = io.BytesIO()
@@ -183,7 +187,8 @@ def _build_home_sheet(wb, church_name, service_dates, duties,
             col += 1
 
         for reading in service_readings[row_offset]:
-            c = ws.cell(row=row, column=col, value=reading)
+            ref = reading["ref"] if isinstance(reading, dict) else reading
+            c = ws.cell(row=row, column=col, value=ref)
             c.font = _font(size=10)
             c.fill = fill
             c.alignment = Alignment(wrap_text=True, vertical="center")
@@ -200,55 +205,75 @@ def _build_home_sheet(wb, church_name, service_dates, duties,
     ws.freeze_panes = ws.cell(row=header_row + 1, column=1)
 
 
+# ── helpers ────────────────────────────────────────────────────────────────
+def _section_header(ws, row, title):
+    ws.row_dimensions[row].height = 20
+    ws.merge_cells(f"A{row}:B{row}")
+    c = ws[f"A{row}"]
+    c.value = title
+    c.font = _font(bold=True, size=12, colour=WHITE)
+    c.fill = _fill(NAVY)
+    c.alignment = Alignment(horizontal="left", vertical="center", indent=1)
+    return row
+
+
+def _text_block(ws, row, text, fill_colour=LIGHT, size=11):
+    """Write a multi-line text block, one row per line, merged A:B."""
+    lines = text.splitlines() if text else [""]
+    for line in lines:
+        ws.row_dimensions[row].height = 16
+        ws.merge_cells(f"A{row}:B{row}")
+        c = ws[f"A{row}"]
+        c.value = f"  {line}" if line else ""
+        c.font = _font(size=size)
+        c.fill = _fill(fill_colour)
+        c.alignment = Alignment(vertical="center", wrap_text=True)
+        row += 1
+    return row
+
+
 # ── individual SERVICE sheet ───────────────────────────────────────────────
 def _build_service_sheet(wb, church_name, svc_date, duties,
-                         assignments, hymns, readings):
+                         assignments, hymns, readings, prayers):
     sheet_name = svc_date.strftime("%d %b %Y")
     ws = wb.create_sheet(sheet_name)
     ws.sheet_view.showGridLines = False
     ws.column_dimensions["A"].width = 34
-    ws.column_dimensions["B"].width = 42
+    ws.column_dimensions["B"].width = 62
 
     row = 1
 
-    # church name + date header
+    # church name header
     ws.row_dimensions[row].height = 36
     ws.merge_cells(f"A{row}:B{row}")
     c = ws[f"A{row}"]
     c.value = church_name
     c.font = _font(bold=True, size=16, colour=WHITE)
     c.fill = _fill(NAVY)
-    c.alignment = Alignment(horizontal="left", vertical="center",
-                            indent=1)
+    c.alignment = Alignment(horizontal="left", vertical="center", indent=1)
 
     # date sub-header
     row += 1
     ws.row_dimensions[row].height = 22
     ws.merge_cells(f"A{row}:B{row}")
     c = ws[f"A{row}"]
-    c.value = f"{svc_date.strftime('%A, %d %B %Y')}"
+    c.value = svc_date.strftime("%A, %d %B %Y")
     c.font = _font(bold=True, size=13, colour=WHITE)
     c.fill = _fill(GOLD)
     c.alignment = Alignment(horizontal="left", vertical="center", indent=1)
 
     row += 1  # spacer
 
-    # ── Hymns section ──
+    # ── HYMNS ──
     row += 1
-    ws.row_dimensions[row].height = 20
-    ws.merge_cells(f"A{row}:B{row}")
-    c = ws[f"A{row}"]
-    c.value = "HYMNS"
-    c.font = _font(bold=True, size=12, colour=WHITE)
-    c.fill = _fill(NAVY)
-    c.alignment = Alignment(horizontal="left", vertical="center", indent=1)
-
+    _section_header(ws, row, "HYMNS")
     for i, hymn in enumerate(hymns, 1):
         row += 1
         ws.row_dimensions[row].height = 18
-        ws.cell(row=row, column=1, value=f"  {i}.").font = _font(bold=True, size=11)
-        ws.cell(row=row, column=1).fill = _fill(CREAM)
-        ws.cell(row=row, column=1).alignment = Alignment(vertical="center")
+        c1 = ws.cell(row=row, column=1, value=f"  {i}.")
+        c1.font = _font(bold=True, size=11)
+        c1.fill = _fill(CREAM)
+        c1.alignment = Alignment(vertical="center")
         c2 = ws.cell(row=row, column=2, value=hymn)
         c2.font = _font(size=11, italic=True)
         c2.fill = _fill(CREAM)
@@ -256,41 +281,41 @@ def _build_service_sheet(wb, church_name, svc_date, duties,
 
     row += 1  # spacer
 
-    # ── Scripture Readings section ──
+    # ── SCRIPTURE READINGS ──
     row += 1
-    ws.row_dimensions[row].height = 20
-    ws.merge_cells(f"A{row}:B{row}")
-    c = ws[f"A{row}"]
-    c.value = "SCRIPTURE READINGS"
-    c.font = _font(bold=True, size=12, colour=WHITE)
-    c.fill = _fill(NAVY)
-    c.alignment = Alignment(horizontal="left", vertical="center", indent=1)
-
+    _section_header(ws, row, "SCRIPTURE READINGS")
     ordinals = ["1st Reading", "2nd Reading", "3rd Reading", "4th Reading"]
     for i, reading in enumerate(readings):
-        row += 1
-        ws.row_dimensions[row].height = 18
+        ref  = reading["ref"]  if isinstance(reading, dict) else reading
+        text = reading.get("text", "").strip() if isinstance(reading, dict) else ""
         label = ordinals[i] if i < len(ordinals) else f"Reading {i+1}"
-        ws.cell(row=row, column=1, value=f"  {label}:").font = _font(bold=True, size=11)
-        ws.cell(row=row, column=1).fill = _fill(LIGHT)
-        ws.cell(row=row, column=1).alignment = Alignment(vertical="center")
-        c2 = ws.cell(row=row, column=2, value=reading)
-        c2.font = _font(size=11)
-        c2.fill = _fill(LIGHT)
+        alt_fill = CREAM if i % 2 == 0 else LIGHT
+
+        # reference row
+        row += 1
+        ws.row_dimensions[row].height = 20
+        c1 = ws.cell(row=row, column=1, value=f"  {label}:")
+        c1.font = _font(bold=True, size=11)
+        c1.fill = _fill(alt_fill)
+        c1.alignment = Alignment(vertical="center")
+        c2 = ws.cell(row=row, column=2, value=ref)
+        c2.font = _font(bold=True, size=11)
+        c2.fill = _fill(alt_fill)
         c2.alignment = Alignment(vertical="center")
 
-    row += 1  # spacer
+        # full scripture text (if provided)
+        if text:
+            row += 1
+            row = _text_block(ws, row, text, fill_colour=alt_fill, size=10)
+            row -= 1  # _text_block already advanced past last line
 
-    # ── Duties section ──
+        row += 1  # gap between readings
+
+    row += 1  # spacer before duties
+
+    # ── DUTIES ──
     row += 1
-    ws.row_dimensions[row].height = 20
-    ws.merge_cells(f"A{row}:B{row}")
-    c = ws[f"A{row}"]
-    c.value = "DUTIES"
-    c.font = _font(bold=True, size=12, colour=WHITE)
-    c.fill = _fill(NAVY)
-    c.alignment = Alignment(horizontal="left", vertical="center", indent=1)
-
+    _section_header(ws, row, "DUTIES")
     for i, duty in enumerate(duties):
         if not duty["name"].strip():
             continue
@@ -308,6 +333,35 @@ def _build_service_sheet(wb, church_name, svc_date, duties,
         c2.fill = fill
         c2.alignment = Alignment(vertical="center")
         c2.border = _bottom_border()
+
+    # ── PRAYERS ──
+    if prayers:
+        row += 2
+        _section_header(ws, row, "PRAYERS")
+        for pi, prayer in enumerate(prayers):
+            name = prayer.get("name", f"Prayer {pi+1}").strip()
+            text = prayer.get("text", "").strip()
+            if not name and not text:
+                continue
+            alt_fill = CREAM if pi % 2 == 0 else LIGHT
+
+            # prayer name row
+            row += 1
+            ws.row_dimensions[row].height = 20
+            ws.merge_cells(f"A{row}:B{row}")
+            c = ws[f"A{row}"]
+            c.value = f"  {name}"
+            c.font = _font(bold=True, size=11, colour=NAVY)
+            c.fill = _fill(alt_fill)
+            c.alignment = Alignment(vertical="center")
+
+            # prayer text
+            if text:
+                row += 1
+                row = _text_block(ws, row, text, fill_colour=alt_fill, size=10)
+                row -= 1
+
+            row += 1  # gap between prayers
 
     row += 2
     ws.row_dimensions[row].height = 14

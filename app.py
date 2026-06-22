@@ -19,9 +19,10 @@ DEFAULT_CONFIG = {
         {"name": "Ad Hoc Duty 3", "people": []},
     ],
     "hymns": [],
-    "readings": [],
+    "readings": [],   # list of {"ref": str, "text": str}
     "hymns_per_service": 3,
     "readings_per_service": 2,
+    "prayers": [],    # list of {"name": str, "text": str}
 }
 
 
@@ -250,28 +251,67 @@ for i in range(6):
 # SECTION 4 — Hymns & Readings
 # ═══════════════════════════════════════════════════════════════════════════
 st.markdown("## 4. Hymns & Scripture Readings")
-st.caption("Enter your master lists below (one item per line). The generator will randomly assign them across services.")
 
-col_h, col_r = st.columns(2)
-with col_h:
-    hymns_text = "\n".join(cfg["hymns"])
-    updated_hymns = st.text_area(
-        "Master hymn list",
-        value=hymns_text,
-        height=250,
-        placeholder="The Lord's My Shepherd\nBe Thou My Vision\nHow Great Thou Art\n...",
-    )
-    cfg["hymns"] = [h.strip() for h in updated_hymns.splitlines() if h.strip()]
+# ── Hymns ──
+st.markdown("### Hymns")
+st.caption("One hymn per line. These are randomly assigned across services.")
+hymns_text = "\n".join(cfg["hymns"])
+updated_hymns = st.text_area(
+    "Master hymn list",
+    value=hymns_text,
+    height=180,
+    placeholder="The Lord's My Shepherd\nBe Thou My Vision\nHow Great Thou Art\n...",
+)
+cfg["hymns"] = [h.strip() for h in updated_hymns.splitlines() if h.strip()]
 
-with col_r:
-    readings_text = "\n".join(cfg["readings"])
-    updated_readings = st.text_area(
-        "Master scripture readings list",
-        value=readings_text,
-        height=250,
-        placeholder="Genesis 1:1-5\nPsalm 23\nJohn 3:16\n...",
-    )
-    cfg["readings"] = [r.strip() for r in updated_readings.splitlines() if r.strip()]
+# ── Readings ──
+st.markdown("### Scripture Readings")
+st.caption(
+    "Add each reading below — a reference (e.g. *Psalm 23*) is required; "
+    "the full text is optional but will be printed in full on each service sheet."
+)
+
+# migrate legacy plain-string readings to dict format
+if cfg["readings"] and isinstance(cfg["readings"][0], str):
+    cfg["readings"] = [{"ref": r, "text": ""} for r in cfg["readings"]]
+
+# add / remove readings
+if "readings" not in cfg:
+    cfg["readings"] = []
+
+ra_col, rb_col = st.columns([5, 1])
+with ra_col:
+    new_ref = st.text_input("New reading reference", placeholder="e.g. John 14:1-6", key="new_reading_ref")
+with rb_col:
+    st.markdown("<br>", unsafe_allow_html=True)
+    if st.button("Add reading"):
+        if new_ref.strip():
+            cfg["readings"].append({"ref": new_ref.strip(), "text": ""})
+            st.rerun()
+
+readings_to_remove = None
+for ri, reading in enumerate(cfg["readings"]):
+    with st.expander(f"📖 {reading['ref'] or f'Reading {ri+1}'}", expanded=False):
+        rc1, rc2 = st.columns([8, 1])
+        with rc1:
+            new_r = st.text_input(
+                "Reference", value=reading["ref"],
+                key=f"reading_ref_{ri}", label_visibility="collapsed"
+            )
+            cfg["readings"][ri]["ref"] = new_r
+        with rc2:
+            if st.button("Remove", key=f"rm_reading_{ri}"):
+                readings_to_remove = ri
+        cfg["readings"][ri]["text"] = st.text_area(
+            "Full scripture text (optional — printed word-for-word in the service sheet)",
+            value=reading.get("text", ""),
+            height=150,
+            key=f"reading_text_{ri}",
+            placeholder="Paste the full passage text here...",
+        )
+if readings_to_remove is not None:
+    cfg["readings"].pop(readings_to_remove)
+    st.rerun()
 
 # ═══════════════════════════════════════════════════════════════════════════
 # SECTION 5 — Sheet Music
@@ -340,6 +380,55 @@ else:
             )
 
 # ═══════════════════════════════════════════════════════════════════════════
+# SECTION 6 — Prayer Templates
+# ═══════════════════════════════════════════════════════════════════════════
+st.markdown("## 6. Prayer Templates")
+st.caption(
+    "Add standing prayers that appear word-for-word on every service sheet "
+    "(e.g. Collect, Confession, Lord's Prayer). "
+    "Order them here — they print in this order."
+)
+
+if "prayers" not in cfg:
+    cfg["prayers"] = []
+
+pa_col, pb_col = st.columns([5, 1])
+with pa_col:
+    new_prayer_name = st.text_input(
+        "New prayer name", placeholder="e.g. The Collect, Confession, Lord's Prayer",
+        key="new_prayer_name"
+    )
+with pb_col:
+    st.markdown("<br>", unsafe_allow_html=True)
+    if st.button("Add prayer"):
+        if new_prayer_name.strip():
+            cfg["prayers"].append({"name": new_prayer_name.strip(), "text": ""})
+            st.rerun()
+
+prayer_to_remove = None
+for pi, prayer in enumerate(cfg["prayers"]):
+    with st.expander(f"🙏 {prayer['name'] or f'Prayer {pi+1}'}", expanded=False):
+        pc1, pc2 = st.columns([8, 1])
+        with pc1:
+            cfg["prayers"][pi]["name"] = st.text_input(
+                "Prayer name", value=prayer["name"],
+                key=f"prayer_name_{pi}", label_visibility="collapsed"
+            )
+        with pc2:
+            if st.button("Remove", key=f"rm_prayer_{pi}"):
+                prayer_to_remove = pi
+        cfg["prayers"][pi]["text"] = st.text_area(
+            "Prayer text (word for word)",
+            value=prayer.get("text", ""),
+            height=180,
+            key=f"prayer_text_{pi}",
+            placeholder="Type or paste the full prayer text here...",
+        )
+if prayer_to_remove is not None:
+    cfg["prayers"].pop(prayer_to_remove)
+    st.rerun()
+
+# ═══════════════════════════════════════════════════════════════════════════
 # SAVE + GENERATE
 # ═══════════════════════════════════════════════════════════════════════════
 st.markdown("---")
@@ -360,7 +449,8 @@ with col_gen:
     readings_needed = n_services * cfg["readings_per_service"]
     if len(cfg["hymns"]) < 1:
         errors.append(f"Add at least 1 hymn (need {hymns_needed} total, cycling is fine).")
-    if len(cfg["readings"]) < 1:
+    valid_readings = [r for r in cfg["readings"] if (r["ref"] if isinstance(r, dict) else r).strip()]
+    if len(valid_readings) < 1:
         errors.append(f"Add at least 1 reading (need {readings_needed} total, cycling is fine).")
     active_duties_with_people = [
         d for d in cfg["duties"] if d["name"].strip() and d["people"]
@@ -381,6 +471,7 @@ with col_gen:
                     readings=cfg["readings"],
                     hymns_per_service=cfg["hymns_per_service"],
                     readings_per_service=cfg["readings_per_service"],
+                    prayers=cfg.get("prayers", []),
                 )
                 fname = f"church_roster_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx"
                 st.download_button(
