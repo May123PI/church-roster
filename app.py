@@ -188,6 +188,72 @@ with col_r:
     cfg["readings"] = [r.strip() for r in updated_readings.splitlines() if r.strip()]
 
 # ═══════════════════════════════════════════════════════════════════════════
+# SECTION 5 — Sheet Music
+# ═══════════════════════════════════════════════════════════════════════════
+st.markdown("## 5. Sheet Music")
+st.caption(
+    "Select an instrument and click a hymn to open free sheet music. "
+    "Only public-domain hymns have direct PDF links — others open a search."
+)
+
+INSTRUMENT_OPTIONS = ["Organ", "Guitar", "Flute"]
+instrument = st.radio("Instrument", INSTRUMENT_OPTIONS, horizontal=True)
+
+# Hymnary.org instrument query keywords
+INSTRUMENT_QUERY = {
+    "Organ":  "organ",
+    "Guitar": "guitar chords",
+    "Flute":  "flute",
+}
+
+# Known public-domain hymns with direct Hymnary tune page slugs
+# Format: lowercase hymn name fragment → hymnary tune slug
+HYMNARY_SLUGS = {
+    "the lord's my shepherd":        "crimond",
+    "be thou my vision":             "slane",
+    "how great thou art":            "how_great_thou_art",
+    "guide me o thou great redeemer":"cwm_rhondda",
+    "immortal invisible":            "st_denio",
+    "all things bright and beautiful":"royal_oak",
+    "dear lord and father of mankind":"repton",
+    "praise my soul the king of heaven":"lauda_anima",
+    "to god be the glory":           "to_god_be_the_glory",
+    "o lord my god":                 "how_great_thou_art",
+    "abide with me":                 "eventide",
+    "o come all ye faithful":        "adeste_fideles",
+    "hark the herald angels sing":   "mendelssohn",
+    "away in a manger":              "away_in_a_manger",
+    "love divine all loves excelling":"blaenwern",
+}
+
+def _hymnary_url(hymn: str, instrument: str) -> tuple[str, str]:
+    """Return (url, label) for a hymn + instrument combo."""
+    key = hymn.lower().strip()
+    slug = next((v for k, v in HYMNARY_SLUGS.items() if k in key), None)
+    instr_q = INSTRUMENT_QUERY[instrument]
+    if slug:
+        url = f"https://hymnary.org/tune/{slug}"
+        label = f"Open on Hymnary.org ({instrument} score)"
+    else:
+        query = hymn.replace(" ", "+") + f"+{instr_q}+sheet+music"
+        url = f"https://hymnary.org/search?qu={query}"
+        label = f"Search Hymnary.org for {instrument} music"
+    return url, label
+
+hymn_list = cfg.get("hymns", [])
+if not hymn_list:
+    st.info("Add hymns in Section 4 to see sheet music links here.")
+else:
+    cols_sm = st.columns(3)
+    for idx, hymn in enumerate(hymn_list):
+        with cols_sm[idx % 3]:
+            url, label = _hymnary_url(hymn, instrument)
+            st.markdown(
+                f"**{hymn}**  \n"
+                f"[{label}]({url})"
+            )
+
+# ═══════════════════════════════════════════════════════════════════════════
 # SAVE + GENERATE
 # ═══════════════════════════════════════════════════════════════════════════
 st.markdown("---")

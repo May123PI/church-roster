@@ -147,7 +147,7 @@ def _build_home_sheet(wb, church_name, service_dates, duties,
     active_duty_indices = [i for i, d in enumerate(duties) if d["name"].strip()]
     for row_offset, svc_date in enumerate(service_dates):
         row = header_row + 1 + row_offset
-        ws.row_dimensions[row].height = 18
+        ws.row_dimensions[row].height = 30
         fill = _fill(CREAM) if row_offset % 2 == 0 else _fill(WHITE)
 
         col = 1
@@ -186,7 +186,7 @@ def _build_home_sheet(wb, church_name, service_dates, duties,
 
     # column widths
     col_widths = [14, 12] + [22] * len(active_duty_indices) \
-                 + [30] * hymns_per_service + [28] * readings_per_service
+                 + [32] * hymns_per_service + [45] * readings_per_service
     for i, w in enumerate(col_widths, 1):
         ws.column_dimensions[get_column_letter(i)].width = w
 
