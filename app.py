@@ -107,7 +107,7 @@ with tab_single:
 
 with tab_bulk:
     st.markdown("Add every **nth weekday** between two dates (e.g. every Sunday for a year).")
-    bc1, bc2, bc3, bc4 = st.columns([2, 2, 2, 1])
+    bc1, bc2, bc3 = st.columns([2, 2, 2])
     with bc1:
         bulk_start = st.date_input("From", value=date.today(), key="bulk_start")
     with bc2:
@@ -123,27 +123,61 @@ with tab_bulk:
                     "Thursday", "Friday", "Saturday"]
         bulk_day = st.selectbox("Weekday", WEEKDAYS, index=0, key="bulk_day")
         bulk_every = st.selectbox("Frequency", ["Every week", "Every 2 weeks", "Every 4 weeks"], key="bulk_every")
-    with bc4:
+
+    # exclusions
+    if "bulk_exclusions" not in st.session_state:
+        st.session_state.bulk_exclusions = []
+
+    st.markdown("**Exclude dates** (e.g. bank holidays, special services):")
+    ex_col1, ex_col2 = st.columns([3, 1])
+    with ex_col1:
+        excl_pick = st.date_input("Date to exclude", value=None, key="excl_picker")
+    with ex_col2:
         st.markdown("<br>", unsafe_allow_html=True)
-        if st.button("Bulk add"):
-            from datetime import timedelta
-            step = {"Every week": 7, "Every 2 weeks": 14, "Every 4 weeks": 28}[bulk_every]
-            target_wd = WEEKDAYS.index(bulk_day) % 7  # 0=Mon in Python, Sunday=6
-            # Python weekday: Mon=0 … Sun=6; we use isoweekday Sun=7→0
-            py_target = 6 if target_wd == 0 else target_wd - 1
-            # find first occurrence on or after bulk_start
-            cursor = bulk_start
-            days_ahead = (py_target - cursor.weekday()) % 7
-            cursor = cursor + timedelta(days=days_ahead)
-            added = 0
-            while cursor <= bulk_end:
-                if cursor not in st.session_state.service_dates:
-                    st.session_state.service_dates.append(cursor)
-                    added += 1
-                cursor += timedelta(days=step)
-            st.session_state.service_dates.sort()
-            st.success(f"Added {added} date(s).")
+        if st.button("Add exclusion"):
+            if excl_pick and excl_pick not in st.session_state.bulk_exclusions:
+                st.session_state.bulk_exclusions.append(excl_pick)
+                st.session_state.bulk_exclusions.sort()
+                st.rerun()
+
+    if st.session_state.bulk_exclusions:
+        excl_remove = None
+        excl_cols = st.columns(4)
+        for ei, ed in enumerate(st.session_state.bulk_exclusions):
+            with excl_cols[ei % 4]:
+                ec1, ec2 = st.columns([4, 1])
+                ec1.markdown(f"~~{ed.strftime('%d %b %Y')}~~")
+                if ec2.button("✕", key=f"excl_rm_{ei}", help="Remove exclusion"):
+                    excl_remove = ei
+        if excl_remove is not None:
+            st.session_state.bulk_exclusions.pop(excl_remove)
             st.rerun()
+        if st.button("Clear exclusions", key="clear_excl"):
+            st.session_state.bulk_exclusions = []
+            st.rerun()
+
+    if st.button("Bulk add", type="primary"):
+        from datetime import timedelta
+        step = {"Every week": 7, "Every 2 weeks": 14, "Every 4 weeks": 28}[bulk_every]
+        py_target = 6 if WEEKDAYS.index(bulk_day) == 0 else WEEKDAYS.index(bulk_day) - 1
+        cursor = bulk_start
+        days_ahead = (py_target - cursor.weekday()) % 7
+        cursor = cursor + timedelta(days=days_ahead)
+        exclusion_set = set(st.session_state.bulk_exclusions)
+        added, skipped = 0, 0
+        while cursor <= bulk_end:
+            if cursor in exclusion_set:
+                skipped += 1
+            elif cursor not in st.session_state.service_dates:
+                st.session_state.service_dates.append(cursor)
+                added += 1
+            cursor += timedelta(days=step)
+        st.session_state.service_dates.sort()
+        msg = f"Added {added} date(s)."
+        if skipped:
+            msg += f" Skipped {skipped} excluded date(s)."
+        st.success(msg)
+        st.rerun()
 
 # date list with remove buttons
 st.markdown("---")
